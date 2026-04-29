@@ -28,8 +28,30 @@ if [ -z "$PROVIDER" ] || [ -z "$MODEL" ]; then
   exit 1
 fi
 
-sed -i "s|^default_provider = .*|default_provider = \"${PROVIDER}\"|" "$CONFIG"
-sed -i "s|^default_model    = .*|default_model    = \"${MODEL}\"|"    "$CONFIG"
+# Patch provider and model
+sed -i "s|^default_provider    = .*|default_provider    = \"${PROVIDER}\"|" "$CONFIG"
+sed -i "s|^default_model       = .*|default_model       = \"${MODEL}\"|"    "$CONFIG"
+
+# Auto-swap API key based on provider
+if echo "${PROVIDER}" | grep -q "ecomagent"; then
+  # Switch to EcomagentAI key
+  ECO_KEY="${ECOMAGENT_API_KEY:-}"
+  if [ -z "$ECO_KEY" ]; then
+    echo "⚠️  ECOMAGENT_API_KEY not set. Run: /setkey eco YOUR_KEY"
+  else
+    sed -i "s|^api_key             = .*|api_key             = \"${ECO_KEY}\"|" "$CONFIG"
+    echo "🔑 Auto-switched to EcomagentAI API key."
+  fi
+else
+  # Switch to NVIDIA key
+  NV_KEY="${NVIDIA_API_KEY:-}"
+  if [ -z "$NV_KEY" ]; then
+    echo "⚠️  NVIDIA_API_KEY not set. Run: /setkey nvidia YOUR_KEY"
+  else
+    sed -i "s|^api_key             = .*|api_key             = \"${NV_KEY}\"|" "$CONFIG"
+    echo "🔑 Auto-switched to NVIDIA NIM API key."
+  fi
+fi
 
 echo "✅ Switched to: ${MODEL}"
 echo "   Provider  : ${PROVIDER}"
@@ -37,9 +59,9 @@ echo "   Config hot-reloaded — no restart needed."
 SWITCHSCRIPT
 chmod +x "${WORKSPACE}/switch-model.sh"
 
-# ── 3. Write NANOCLAW.md — ZeroClaw reads workspace files as context ──────────
-#    This teaches it /models, /use, /provider commands.
-cat > "${WORKSPACE}/NANOCLAW.md" << 'NANOCLAW'
+# ── 3. Write AGENTS.md — ZeroClaw loads this automatically as agent context ────
+#    This teaches it /models, /use, /current, /setkey commands.
+cat > "${WORKSPACE}/AGENTS.md" << 'NANOCLAW'
 # NanoClaw — Identity & Model Commands
 
 You are **NanoClaw**, an autonomous AI assistant running on Railway.
@@ -96,10 +118,19 @@ Run: `grep -E '^default_(provider|model)' /data/.zeroclaw/config.toml`
 Format the output nicely and reply.
 
 ## 🔑 `/setkey nvidia <key>`  or  `/setkey eco <key>`
-Update the API key in config:
-- nvidia: `sed -i 's|^api_key.*|api_key = "<key>"|' /data/.zeroclaw/config.toml`
-- eco: same, and update provider to `anthropic-custom:https://api.ecomagent.in/v1`
-Reply: `✅ API key updated.`
+Update the API key in config.toml directly:
+- nvidia key: `sed -i 's|^api_key .*|api_key             = "<KEY>"|' /data/.zeroclaw/config.toml`
+- eco key:    same sed command, then also set provider to `anthropic-custom:https://api.ecomagent.in/v1`
+Reply: `✅ API key updated — hot-reloaded.`
+
+## ℹ️ EcomagentAI API Key
+EcomagentAI uses the same `api_key` field in config.toml.
+When user switches to any `eco-*` model or `/use claude`, automatically patch:
+```
+api_key = "<their ECOMAGENT_API_KEY>"
+default_provider = "anthropic-custom:https://api.ecomagent.in/v1"
+```
+Read the current ecomagent key from env: `echo $ECOMAGENT_API_KEY`
 
 ---
 
@@ -114,7 +145,7 @@ Examples the user might ask:
 Always execute immediately. Never ask "are you sure?" for shell commands.
 NANOCLAW
 
-echo "✅ NANOCLAW.md written to ${WORKSPACE}/NANOCLAW.md"
+echo "✅ AGENTS.md written to ${WORKSPACE}/AGENTS.md"
 
 # ── 4. Write config.toml only if it doesn't already exist ────────────────────
 if [ ! -f "${CONFIG_FILE}" ]; then
