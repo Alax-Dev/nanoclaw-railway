@@ -22,9 +22,8 @@ ENV ZEROCLAW_GATEWAY_PORT=42617
 # Set ZEROCLAW_PROVIDER=nvidia  OR  custom:https://api.ecomagent.in/  at deploy time
 ENV ZEROCLAW_PROVIDER=nvidia
 
-# Copy start script
-COPY start.sh /start.sh
-RUN chmod +x /start.sh
+# Copy start script (--chmod avoids permission errors on non-root images)
+COPY --chmod=755 start.sh /start.sh
 
 EXPOSE 42617
 
